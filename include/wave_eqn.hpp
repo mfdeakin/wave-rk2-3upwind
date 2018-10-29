@@ -25,7 +25,7 @@ class Part1 {
     }
   }
 
-  static constexpr real boundary_val(const real time) noexcept {
+  static real boundary_val(const real time) noexcept {
     return std::sin(4.0 * pi * time);
   }
 
@@ -102,6 +102,7 @@ class WaveEqnSolver {
   void timestep_rk3() noexcept;
 
   real time() const noexcept { return t; }
+	real dx() const noexcept { return cva(0).dx; }
 
   const real dt;
 
@@ -109,14 +110,10 @@ class WaveEqnSolver {
   real operator()(const real x) const noexcept;
 
   real operator[](int i) const noexcept {
-    assert(i >= 0);
-    assert(i < cva(static_cast<int>(cur_ts)).extent(0));
     return cva(static_cast<int>(cur_ts))(i);
   }
 
   real &operator[](int i) noexcept {
-    assert(i >= 0);
-    assert(i < cva(static_cast<int>(cur_ts)).extent(0));
     return cva(static_cast<int>(cur_ts))(i);
   }
 
