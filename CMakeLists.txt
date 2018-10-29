@@ -6,7 +6,7 @@ include_directories(./include)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
-add_library(waves ./src/wave_eqn_small.cpp ./src/wave_eqn_large.cpp)
+add_library(waves ./src/wave_eqn_small.cpp ./src/wave_eqn_med.cpp ./src/wave_eqn_large.cpp)
 add_executable(waves_tester ./src/test.cpp)
 add_executable(waves_solver ./src/solver.cpp)
 add_test(waves_test waves_tester)
