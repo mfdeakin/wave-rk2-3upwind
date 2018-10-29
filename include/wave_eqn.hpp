@@ -25,15 +25,21 @@ class Part1 {
     }
   }
 
+  static constexpr real boundary_val(const real time) noexcept {
+    return std::sin(4.0 * pi * time);
+  }
+
   template <typename MeshT>
   static void fill_ghostcells(MeshT &mesh, real time) noexcept {
-    mesh(0) = 2.0 * std::sin(4 * pi * time) - mesh(1);
+    mesh(0) = 2.0 * boundary_val(time) - mesh(1);
   }
 };
 
-template <int _ctrl_vols>
+template <int _ctrl_vols, typename _boundary_conds = Part1>
 class Mesh : public ND_Array<real, _ctrl_vols + 2> {
  public:
+  using BoundaryConds = _boundary_conds;
+
   static constexpr real dx = (max_x - min_x) / _ctrl_vols;
 
   static constexpr real x1(const int cell_x) noexcept {
@@ -59,21 +65,27 @@ class Mesh : public ND_Array<real, _ctrl_vols + 2> {
   }
 
   // Computes the CVA of dT/dx
-  constexpr real flux_integral(const int i) const noexcept {
+  constexpr real flux_integral(const int i, const real time) const noexcept {
     assert(i > 0);
     assert(i < this->extent(0) - 1);
-    return (3.0 * (*this)(i + 1) - 4.0 * (*this)(i) + (*this)(i - 1)) /
-           (2.0 * dx);
+    if(i > 1) {
+      return (3.0 * (*this)(i)-4.0 * (*this)(i - 1) + (*this)(i - 2)) /
+             (2.0 * dx);
+    } else {
+      return (3.0 * (*this)(i)-1.0 * (*this)(i - 1) -
+              2.0 * BoundaryConds::boundary_val(time)) /
+             (2.0 * dx);
+    }
   }
 };
 
 enum class TimeStage { stage_0 = 0, stage_1 = 1, stage_partial = 2 };
 
-template <int _ctrl_vols, typename _BoundaryConds>
+template <int _ctrl_vols, typename _boundary_conds>
 class WaveEqnSolver {
  public:
-  using BoundaryConds = _BoundaryConds;
-  using MeshT         = Mesh<_ctrl_vols>;
+  using BoundaryConds = _boundary_conds;
+  using MeshT         = Mesh<_ctrl_vols, BoundaryConds>;
 
   static constexpr int time_stages = 3;
 

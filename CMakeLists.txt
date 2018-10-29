@@ -4,6 +4,9 @@ project(waves)
 
 include_directories(./include)
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 add_library(waves ./src/wave_eqn_small.cpp ./src/wave_eqn_large.cpp)
 add_executable(waves_tester ./src/test.cpp)
 add_executable(waves_solver ./src/solver.cpp)

@@ -67,7 +67,7 @@ void WaveEqnSolver<_ctrl_vols, _bc>::flux_integration(
   for(int i = 1; i < next_ts.extent(0) - 1; i++) {
     // Compute the dT/dx term with the second order upwinding scheme
     // Then add the previous time stage to this times the stage_dt
-    next_ts(i) = -2.0 * partial_ts.flux_integral(i) * stage_dt + cur_ts(i);
+    next_ts(i) = -2.0 * partial_ts.flux_integral(i, time()) * stage_dt + cur_ts(i);
   }
 }
 

@@ -52,9 +52,9 @@ TEST(flux_integral, poly) {
     mesh(i) = x * x * x + 0.25 * std::sin(2.0 * pi * x) + 3.0;
   }
 
-  for(int i = 1; i < mesh.extent(0) - 1; i++) {
+  for(int i = 2; i < mesh.extent(0) - 1; i++) {
     const real x = mesh.median_x(i);
-    EXPECT_NEAR(mesh.flux_integral(i),
+    EXPECT_NEAR(mesh.flux_integral(i, std::numeric_limits<real>::quiet_NaN()),
                 3.0 * x * x + 0.5 * pi * std::cos(2.0 * pi * x), 5e-3);
   }
 }
@@ -74,11 +74,12 @@ TEST(flux_integral, exp) {
     mesh(i) = std::exp(std::sqrt(x * x * x));
   }
 
-  for(int i = 2; i < mesh.extent(0) - 1; i++) {
+	// Avoid the boundary conditions by starting i > 2
+  for(int i = 3; i < mesh.extent(0) - 1; i++) {
     const real x = mesh.median_x(i);
-    EXPECT_NEAR(mesh.flux_integral(i),
+    EXPECT_NEAR(mesh.flux_integral(i, std::numeric_limits<real>::quiet_NaN()),
                 std::exp(std::sqrt(x * x * x)) * 3.0 / 2.0 * std::sqrt(x),
-                1e-2);
+                1e-3);
   }
 }
 
@@ -86,9 +87,6 @@ TEST(solver, known_sol) {
   constexpr int ctrl_vols = 8192;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
-
-	ND_Array<int, 10> arr;
-	arr(10) = 43;
 
   Solver solver(0.25);
 
