@@ -74,7 +74,7 @@ TEST(flux_integral, exp) {
     mesh(i) = std::exp(std::sqrt(x * x * x));
   }
 
-	// Avoid the boundary conditions by starting i > 2
+  // Avoid the boundary conditions by starting i > 2
   for(int i = 3; i < mesh.extent(0) - 1; i++) {
     const real x = mesh.median_x(i);
     EXPECT_NEAR(mesh.flux_integral(i, std::numeric_limits<real>::quiet_NaN()),
@@ -83,7 +83,7 @@ TEST(flux_integral, exp) {
   }
 }
 
-TEST(solver, rk2_known_sol) {
+TEST(solver, rk2_avg_sol) {
   constexpr int ctrl_vols = 8192;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
@@ -107,7 +107,60 @@ TEST(solver, rk2_known_sol) {
   }
 }
 
-TEST(solver, rk3_known_sol) {
+template <typename MeshT>
+real l2_error(const MeshT &mesh, const real time) {
+  real l2_err = 0.0;
+  for(int i = 1; i < mesh.extent(0) - 1; i++) {
+    const real x1 = mesh.x1(i);
+    const real x2 = mesh.x2(i);
+
+    const real avg_val = (std::sin(pi * (x2 - x1)) *
+                          std::sin(pi * (4.0 * time - x1 - x2))) /
+                         (pi * (x2 - x1));
+
+    const real err = mesh(i) - avg_val;
+    l2_err += err * err;
+  }
+	return l2_err;
+}
+
+TEST(solver, rk2_l2_err_1en3) {
+  constexpr int ctrl_vols_below = 704;
+  constexpr int ctrl_vols_above = 712;
+
+  WaveEqnSolver<ctrl_vols_below, Part1> solver_below(0.2);
+  WaveEqnSolver<ctrl_vols_above, Part1> solver_above(0.2);
+
+  while(solver_above.time() < 1.0) {
+    solver_below.timestep_rk2();
+    solver_above.timestep_rk2();
+  }
+  const auto &mesh_below = solver_below.cur_mesh();
+	EXPECT_GT(l2_error(mesh_below, solver_below.time()), 1e-3);
+
+  const auto &mesh_above = solver_above.cur_mesh();
+	EXPECT_LT(l2_error(mesh_above, solver_above.time()), 1e-3);
+}
+
+TEST(solver, rk2_l2_err_1en4) {
+  constexpr int ctrl_vols_below = 7816;
+  constexpr int ctrl_vols_above = 7824;
+
+  WaveEqnSolver<ctrl_vols_below, Part1> solver_below(0.2);
+  WaveEqnSolver<ctrl_vols_above, Part1> solver_above(0.2);
+
+  while(solver_above.time() < 1.0) {
+    solver_below.timestep_rk2();
+    solver_above.timestep_rk2();
+  }
+  const auto &mesh_below = solver_below.cur_mesh();
+	EXPECT_GT(l2_error(mesh_below, solver_below.time()), 1e-4);
+
+  const auto &mesh_above = solver_above.cur_mesh();
+	EXPECT_LT(l2_error(mesh_above, solver_above.time()), 1e-4);
+}
+
+TEST(solver, rk3_avg_sol) {
   constexpr int ctrl_vols = 8192;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
@@ -153,34 +206,34 @@ real run_simulation_rk2_p1(const real cfl, const real max_t) {
     solver.timestep_rk2();
   }
 
-	real total_val = 0.0;
-	for(int i = 1; i <= ctrl_vols; i++) {
-		total_val += solver[i];
-	}
-	return total_val * solver.dx();
+  real total_val = 0.0;
+  for(int i = 1; i <= ctrl_vols; i++) {
+    total_val += solver[i];
+  }
+  return total_val * solver.dx();
 }
 
 TEST(solver, mesh_convergence_order_rk2) {
-	constexpr int coarse_n = 20;
-	constexpr int med_n = coarse_n * 2;
-	constexpr int fine_n = med_n * 2;
-	const real coarse_sol = run_simulation_rk2_p1<coarse_n>(0.2, 1.0);
-	const real med_sol = run_simulation_rk2_p1<med_n>(0.2, 1.0);
-	const real fine_sol = run_simulation_rk2_p1<fine_n>(0.2, 1.0);
-	const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
+  constexpr int coarse_n     = 20;
+  constexpr int med_n        = coarse_n * 2;
+  constexpr int fine_n       = med_n * 2;
+  const real coarse_sol      = run_simulation_rk2_p1<coarse_n>(0.2, 1.0);
+  const real med_sol         = run_simulation_rk2_p1<med_n>(0.2, 1.0);
+  const real fine_sol        = run_simulation_rk2_p1<fine_n>(0.2, 1.0);
+  const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
 
-	EXPECT_GT(order, 2.0);
+  EXPECT_GT(order, 2.0);
 }
 
 TEST(solver, time_convergence_order_rk2) {
-	constexpr int ctrl_vols = 4096;
-	constexpr real coarse_dt = 0.125;
-	const real coarse_sol = run_simulation_rk2_p1<ctrl_vols>(coarse_dt, 1.0);
-	const real med_sol = run_simulation_rk2_p1<ctrl_vols>(coarse_dt / 2.0, 1.0);
-	const real fine_sol = run_simulation_rk2_p1<ctrl_vols>(coarse_dt / 4.0, 1.0);
-	const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
+  constexpr int ctrl_vols  = 4096;
+  constexpr real coarse_dt = 0.125;
+  const real coarse_sol    = run_simulation_rk2_p1<ctrl_vols>(coarse_dt, 1.0);
+  const real med_sol  = run_simulation_rk2_p1<ctrl_vols>(coarse_dt / 2.0, 1.0);
+  const real fine_sol = run_simulation_rk2_p1<ctrl_vols>(coarse_dt / 4.0, 1.0);
+  const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
 
-	EXPECT_GT(order, 2.0);
+  EXPECT_GT(order, 2.0);
 }
 
 // Run the simulation until the maximum specified time
@@ -193,23 +246,34 @@ real run_simulation_rk3_p1(const real cfl, const real max_t) {
     solver.timestep_rk3();
   }
 
-	real total_val = 0.0;
-	for(int i = 1; i <= ctrl_vols; i++) {
-		total_val += solver[i];
-	}
-	return total_val * solver.dx();
+  real total_val = 0.0;
+  for(int i = 1; i <= ctrl_vols; i++) {
+    total_val += solver[i];
+  }
+  return total_val * solver.dx();
 }
 
 TEST(solver, mesh_convergence_order_rk3) {
-	constexpr int coarse_n = 1024;
-	constexpr int med_n = coarse_n * 2;
-	constexpr int fine_n = med_n * 2;
-	const real coarse_sol = run_simulation_rk3_p1<coarse_n>(0.2, 1.0);
-	const real med_sol = run_simulation_rk3_p1<med_n>(0.2, 1.0);
-	const real fine_sol = run_simulation_rk3_p1<fine_n>(0.2, 1.0);
-	const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
+  constexpr int coarse_n     = 1024;
+  constexpr int med_n        = coarse_n * 2;
+  constexpr int fine_n       = med_n * 2;
+  const real coarse_sol      = run_simulation_rk3_p1<coarse_n>(0.2, 1.0);
+  const real med_sol         = run_simulation_rk3_p1<med_n>(0.2, 1.0);
+  const real fine_sol        = run_simulation_rk3_p1<fine_n>(0.2, 1.0);
+  const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
 
-	EXPECT_NEAR(order, 2.0, 1e-1);
+  EXPECT_NEAR(order, 2.0, 1e-1);
+}
+
+TEST(solver, time_convergence_order_rk3) {
+  constexpr int ctrl_vols  = 4096;
+  constexpr real coarse_dt = 0.125;
+  const real coarse_sol    = run_simulation_rk3_p1<ctrl_vols>(coarse_dt, 1.0);
+  const real med_sol  = run_simulation_rk3_p1<ctrl_vols>(coarse_dt / 2.0, 1.0);
+  const real fine_sol = run_simulation_rk3_p1<ctrl_vols>(coarse_dt / 4.0, 1.0);
+  const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
+
+  EXPECT_GT(order, 2.0);
 }
 
 int main(int argc, char **argv) {
