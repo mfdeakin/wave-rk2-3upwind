@@ -1,10 +1,6 @@
 
 #include "wave_eqn_internal.hpp"
 
-template class Mesh<2048>;
-template class WaveEqnSolver<2048, Part1>;
-template class Mesh<4096>;
-template class WaveEqnSolver<4096, Part1>;
 // The following 10 meshes were used to determine when the l2 error goes beneath 1e-4
 template class Mesh<6144>;
 template class WaveEqnSolver<6144, Part1>;

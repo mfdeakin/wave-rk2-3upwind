@@ -11,75 +11,104 @@ using real = double;
 
 constexpr real pi = 3.1415926535897932;
 
-static constexpr real min_x = 0.0;
-static constexpr real max_x = 1.0;
-
 class Part1 {
  public:
-  template <typename MeshT>
-  static void initial_conds(MeshT &mesh) noexcept {
-    for(int i = 0; i < mesh.extent(0); i++) {
-      mesh(i) =
-          (std::cos(2.0 * pi * mesh.x2(i)) - std::cos(2.0 * pi * mesh.x1(i))) /
-          (2.0 * pi * mesh.dx);
-    }
+  static real solution_val(const real x, const real time) noexcept {
+    return std::sin(2.0 * pi * (2.0 * time - x));
+  }
+
+  static real avg_solution_val(const real x1, const real x2,
+                               const real time) noexcept {
+    const real dx = x2 - x1;
+    return (std::cos(2.0 * pi * (2.0 * time - x2)) -
+            std::cos(2.0 * pi * (2.0 * time - x1))) /
+           (2.0 * pi * dx);
+  }
+
+  static real deriv_val(const real x, const real time) noexcept {
+    return 2.0 * pi * std::cos(2.0 * pi * (2.0 * time - x));
+  }
+
+  static real avg_deriv_val(const real x1, const real x2,
+                            const real time) noexcept {
+    return (solution_val(x2, time) - solution_val(x1, time)) / (x2 - x1);
   }
 
   static real boundary_val(const real time) noexcept {
-    return std::sin(4.0 * pi * time);
+    return solution_val(0.0, time);
+  }
+
+  static real initial_val(const real x) noexcept {
+    return solution_val(x, 0.0);
   }
 
   template <typename MeshT>
   static void fill_ghostcells(MeshT &mesh, real time) noexcept {
     mesh(0) = 2.0 * boundary_val(time) - mesh(1);
   }
+
+  template <typename MeshT>
+  static void initial_conds(MeshT &mesh) noexcept {
+    for(int i = 0; i < mesh.extent(0); i++) {
+      mesh(i) = avg_solution_val(mesh.x1(i), mesh.x2(i), 0.0);
+    }
+  }
 };
 
 template <int _ctrl_vols, typename _boundary_conds = Part1>
-class Mesh : public ND_Array<real, _ctrl_vols + 2> {
+class Mesh : public ND_Array<real, _ctrl_vols + 1> {
  public:
   using BoundaryConds = _boundary_conds;
 
-  static constexpr real dx = (max_x - min_x) / _ctrl_vols;
-
-  static constexpr real x1(const int cell_x) noexcept {
-    return min_x + (cell_x - 1) * dx;
+  constexpr real x1(const int cell_x) const noexcept {
+    return min_x() + (cell_x - 1) * dx();
   }
 
-  static constexpr real x2(const int cell_x) noexcept {
-    return min_x + cell_x * dx;
+  constexpr real x2(const int cell_x) const noexcept {
+    return min_x() + cell_x * dx();
   }
 
-  static constexpr real median_x(const int cell_x) noexcept {
-    return min_x - dx / 2 + cell_x * dx;
+  constexpr real median_x(const int cell_x) const noexcept {
+    return min_x() - dx() / 2 + cell_x * dx();
   }
 
-  static constexpr int cell_idx(const real x) noexcept {
-    return static_cast<int>((x - min_x) / dx) + 1;
+  constexpr int cell_idx(const real x) const noexcept {
+    return static_cast<int>((x - min_x()) / dx()) + 1;
   }
 
-  constexpr Mesh() noexcept {
-    for(int i = 0; i < this->extent(0); i++) {
-      (*this)(i) = 0.0;
-    }
-  }
+  constexpr Mesh(const real _min_x = 0.0, const real _max_x = 1.0) noexcept
+      : _min_x(_min_x), _max_x(_max_x), _dx((_max_x - _min_x) / _ctrl_vols) {}
 
   // Computes the CVA of dT/dx
   constexpr real flux_integral(const int i, const real time) const noexcept {
     assert(i > 0);
-    assert(i < this->extent(0) - 1);
+    assert(i < this->extent(0));
     if(i > 1) {
       return (3.0 * (*this)(i)-4.0 * (*this)(i - 1) + (*this)(i - 2)) /
-             (2.0 * dx);
+             (2.0 * dx());
     } else {
-      return (3.0 * (*this)(i)-1.0 * (*this)(i - 1) -
-              2.0 * BoundaryConds::boundary_val(time)) /
-             (2.0 * dx);
+      // Evaluate the flux at the right side of the cell, then subtracting the
+      // given value at the left side of the cell and dividing by dx gives the
+      // approximate derivative
+      return ((3.0 * (*this)(1) - 1.0 * (*this)(0)) / 2.0 -
+              BoundaryConds::boundary_val(time)) /
+             dx();
     }
   }
+
+  constexpr real min_x() const noexcept { return _min_x; }
+
+  constexpr real max_x() const noexcept { return _max_x; }
+
+  constexpr real dx() const noexcept { return _dx; }
+
+ protected:
+  real _min_x;
+  real _max_x;
+  real _dx;
 };
 
-enum class TimeStage { stage_0 = 0, stage_1 = 1, stage_partial = 2 };
+enum class TimeStage { stage_0 = 0, stage_1 = 1, stage_2 = 2 };
 
 template <int _ctrl_vols, typename _boundary_conds>
 class WaveEqnSolver {
@@ -89,8 +118,14 @@ class WaveEqnSolver {
 
   static constexpr int time_stages = 3;
 
-  constexpr WaveEqnSolver(const real dtdx = 1.0) noexcept
-      : dt(dtdx * cva(0).dx), t(0.0), cur_ts(TimeStage::stage_0) {
+  constexpr WaveEqnSolver(const real min_x = 0.0, const real max_x = 1.0,
+                          const real dtdx = 1.0) noexcept
+      : mesh_1(min_x, max_x),
+        mesh_2(min_x, max_x),
+        mesh_3(min_x, max_x),
+        _time(0.0),
+        _dt(dtdx * mesh_1.dx()),
+        _cur_ts(TimeStage::stage_0) {
     BoundaryConds::initial_conds(cur_mesh());
   }
 
@@ -98,42 +133,65 @@ class WaveEqnSolver {
     BoundaryConds::fill_ghostcells(cur_mesh(), time());
   }
 
+  constexpr void fill_ghostcells(TimeStage ts, const real t) noexcept {
+    BoundaryConds::fill_ghostcells(mesh(ts), t);
+  }
+
+  void timestep_rk1() noexcept;
   void timestep_rk2() noexcept;
   void timestep_rk3() noexcept;
 
-  real time() const noexcept { return t; }
-	real dx() const noexcept { return cva(0).dx; }
-
-  const real dt;
+  real time() const noexcept { return _time; }
+  real dx() const noexcept { return mesh_1.dx(); }
+  real dt() const noexcept { return _dt; }
 
   // Performs a linear interpolation between the cells to compute x
   real operator()(const real x) const noexcept;
 
-  real operator[](int i) const noexcept {
-    return cva(static_cast<int>(cur_ts))(i);
-  }
+  real &operator[](int i) noexcept { return cur_mesh()(i); }
 
-  real &operator[](int i) noexcept {
-    return cva(static_cast<int>(cur_ts))(i);
-  }
+  real operator[](int i) const noexcept { return cur_mesh()(i); }
 
   void print() const noexcept;
 
-  Mesh<_ctrl_vols> &cur_mesh() noexcept {
-    return cva(static_cast<int>(cur_ts));
-  }
+  const Mesh<_ctrl_vols> &cur_mesh() const noexcept { return mesh(_cur_ts); }
+
+  Mesh<_ctrl_vols> &cur_mesh() noexcept { return mesh(_cur_ts); }
 
  protected:
+  constexpr const Mesh<_ctrl_vols> &mesh(TimeStage ts) const noexcept {
+    switch(ts) {
+      case TimeStage::stage_0:
+        return mesh_1;
+      case TimeStage::stage_1:
+        return mesh_2;
+      default:
+        return mesh_3;
+    }
+  }
+
+  constexpr Mesh<_ctrl_vols> &mesh(TimeStage ts) noexcept {
+    switch(ts) {
+      case TimeStage::stage_0:
+        return mesh_1;
+      case TimeStage::stage_1:
+        return mesh_2;
+      default:
+        return mesh_3;
+    }
+  }
+
   void flux_integration(const MeshT &cur_ts, const MeshT &partial_ts,
-                        MeshT &next_ts, const real stage_dt) noexcept;
+                        MeshT &next_ts, const real bc_time,
+                        const real stage_dt) noexcept;
 
-  ND_Array<Mesh<_ctrl_vols>, time_stages> cva;
+  Mesh<_ctrl_vols> mesh_1, mesh_2, mesh_3;
 
-  // current time
-  real t;
+  // current time information
+  real _time;
+  const real _dt;
 
-  TimeStage cur_ts;
-  static constexpr TimeStage partial_ts = TimeStage::stage_partial;
+  TimeStage _cur_ts;
 };
 
 #endif  // _WAVE_EQN_HPP_

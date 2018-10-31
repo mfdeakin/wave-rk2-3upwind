@@ -20,3 +20,7 @@ template class Mesh<768>;
 template class WaveEqnSolver<768, Part1>;
 template class Mesh<1024>;
 template class WaveEqnSolver<1024, Part1>;
+template class Mesh<2048>;
+template class WaveEqnSolver<2048, Part1>;
+template class Mesh<4096>;
+template class WaveEqnSolver<4096, Part1>;
