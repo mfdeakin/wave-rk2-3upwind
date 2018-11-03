@@ -119,6 +119,7 @@ class WaveEqnSolver {
   using MeshT         = Mesh<_ctrl_vols, BoundaryConds>;
 
   static constexpr int time_stages = 3;
+	static constexpr int ctrl_vols = _ctrl_vols;
 
   constexpr WaveEqnSolver(const real min_x = 0.0, const real max_x = 1.0,
                           const real dtdx = 0.2) noexcept
