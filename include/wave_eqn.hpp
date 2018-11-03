@@ -13,20 +13,22 @@ constexpr real pi = 3.1415926535897932;
 
 class Part1 {
  public:
+  static constexpr real velocity() noexcept { return 2.0; }
+
   static real solution_val(const real x, const real time) noexcept {
-    return std::sin(2.0 * pi * (2.0 * time - x));
+    return std::sin(2.0 * pi * (velocity() * time - x));
   }
 
   static real avg_solution_val(const real x1, const real x2,
                                const real time) noexcept {
     const real dx = x2 - x1;
-    return (std::cos(2.0 * pi * (2.0 * time - x2)) -
-            std::cos(2.0 * pi * (2.0 * time - x1))) /
+    return (std::cos(2.0 * pi * (velocity() * time - x2)) -
+            std::cos(2.0 * pi * (velocity() * time - x1))) /
            (2.0 * pi * dx);
   }
 
   static real deriv_val(const real x, const real time) noexcept {
-    return 2.0 * pi * std::cos(2.0 * pi * (2.0 * time - x));
+    return 2.0 * pi * std::cos(2.0 * pi * (velocity() * time - x));
   }
 
   static real avg_deriv_val(const real x1, const real x2,
@@ -119,7 +121,7 @@ class WaveEqnSolver {
   static constexpr int time_stages = 3;
 
   constexpr WaveEqnSolver(const real min_x = 0.0, const real max_x = 1.0,
-                          const real dtdx = 1.0) noexcept
+                          const real dtdx = 0.2) noexcept
       : mesh_1(min_x, max_x),
         mesh_2(min_x, max_x),
         mesh_3(min_x, max_x),
@@ -140,6 +142,7 @@ class WaveEqnSolver {
   void timestep_rk1() noexcept;
   void timestep_rk2() noexcept;
   void timestep_rk3() noexcept;
+  void timestep_rk4() noexcept;
 
   real time() const noexcept { return _time; }
   real dx() const noexcept { return mesh_1.dx(); }
