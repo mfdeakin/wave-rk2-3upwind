@@ -15,3 +15,5 @@ template class Mesh<320>;
 template class WaveEqnSolver<320, Part1>;
 template class Mesh<500>;
 template class WaveEqnSolver<500, Part1>;
+template class Mesh<512>;
+template class WaveEqnSolver<512, Part1>;
