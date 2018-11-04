@@ -57,7 +57,32 @@ class Part1 {
   }
 };
 
-template <int _ctrl_vols, typename _boundary_conds = Part1>
+class Part2 {
+ public:
+  static constexpr real velocity() noexcept { return 2.0; }
+
+  static real boundary_val(const real time) noexcept {
+    return Part1::boundary_val(time);
+  }
+
+  template <typename MeshT>
+  static void fill_ghostcells(MeshT &mesh, real time) noexcept {
+    mesh(0) = 2.0 * boundary_val(time) - mesh(1);
+  }
+
+  template <typename MeshT>
+  static void initial_conds(MeshT &mesh) noexcept {
+    for(int i = 0; i < mesh.extent(0); i++) {
+      if(mesh.median_x(i) < 1.0) {
+        mesh(i) = -mesh.median_x(i);
+      } else {
+        mesh(i) = 0.0;
+      }
+    }
+  }
+};
+
+template <int _ctrl_vols, typename _boundary_conds>
 class Mesh : public ND_Array<real, _ctrl_vols + 1> {
  public:
   using BoundaryConds = _boundary_conds;
@@ -119,7 +144,7 @@ class WaveEqnSolver {
   using MeshT         = Mesh<_ctrl_vols, BoundaryConds>;
 
   static constexpr int time_stages = 3;
-	static constexpr int ctrl_vols = _ctrl_vols;
+  static constexpr int ctrl_vols   = _ctrl_vols;
 
   constexpr WaveEqnSolver(const real min_x = 0.0, const real max_x = 1.0,
                           const real dtdx = 0.2) noexcept
@@ -156,14 +181,12 @@ class WaveEqnSolver {
 
   real operator[](int i) const noexcept { return cur_mesh()(i); }
 
-  void print() const noexcept;
+  const MeshT &cur_mesh() const noexcept { return mesh(_cur_ts); }
 
-  const Mesh<_ctrl_vols> &cur_mesh() const noexcept { return mesh(_cur_ts); }
-
-  Mesh<_ctrl_vols> &cur_mesh() noexcept { return mesh(_cur_ts); }
+  MeshT &cur_mesh() noexcept { return mesh(_cur_ts); }
 
  protected:
-  constexpr const Mesh<_ctrl_vols> &mesh(TimeStage ts) const noexcept {
+  constexpr const MeshT &mesh(TimeStage ts) const noexcept {
     switch(ts) {
       case TimeStage::stage_0:
         return mesh_1;
@@ -174,7 +197,7 @@ class WaveEqnSolver {
     }
   }
 
-  constexpr Mesh<_ctrl_vols> &mesh(TimeStage ts) noexcept {
+  constexpr MeshT &mesh(TimeStage ts) noexcept {
     switch(ts) {
       case TimeStage::stage_0:
         return mesh_1;
@@ -189,7 +212,7 @@ class WaveEqnSolver {
                         MeshT &next_ts, const real bc_time,
                         const real stage_dt) noexcept;
 
-  Mesh<_ctrl_vols> mesh_1, mesh_2, mesh_3;
+  MeshT mesh_1, mesh_2, mesh_3;
 
   // current time information
   real _time;
