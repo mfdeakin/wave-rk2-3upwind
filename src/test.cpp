@@ -55,7 +55,7 @@ TEST(boundary_conds, x0_tstep) {
   }
 }
 
-TEST(flux_integral, sinusoid) {
+TEST(flux_integral_2nd, sinusoid) {
   constexpr int ctrl_vols = 1024;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
@@ -67,7 +67,7 @@ TEST(flux_integral, sinusoid) {
 
     for(int i = 1; i <= 10; i++) {
       const real x = mesh.median_x(i);
-      EXPECT_NEAR(mesh.flux_integral(i, solver.time()),
+      EXPECT_NEAR(mesh.flux_integral_2nd(i, solver.time()),
                   -2.0 * pi * std::cos(2.0 * pi * (2.0 * solver.time() - x)),
                   5e-3);
     }
@@ -83,7 +83,7 @@ TEST(flux_integral, sinusoid) {
   }
 }
 
-TEST(flux_integral, poly) {
+TEST(flux_integral_2nd, poly) {
   constexpr int ctrl_vols = 1024;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
@@ -99,12 +99,12 @@ TEST(flux_integral, poly) {
 
   for(int i = 2; i < mesh.extent(0) - 1; i++) {
     const real x = mesh.median_x(i);
-    EXPECT_NEAR(mesh.flux_integral(i, std::numeric_limits<real>::quiet_NaN()),
+    EXPECT_NEAR(mesh.flux_integral_2nd(i, std::numeric_limits<real>::quiet_NaN()),
                 3.0 * x * x + 0.5 * pi * std::cos(2.0 * pi * x), 5e-3);
   }
 }
 
-TEST(flux_integral, exp) {
+TEST(flux_integral_2nd, exp) {
   constexpr int ctrl_vols = 4096;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
@@ -122,9 +122,82 @@ TEST(flux_integral, exp) {
   // Avoid the boundary conditions by starting i > 2
   for(int i = 3; i < mesh.extent(0) - 1; i++) {
     const real x = mesh.median_x(i);
-    EXPECT_NEAR(mesh.flux_integral(i, std::numeric_limits<real>::quiet_NaN()),
+    EXPECT_NEAR(mesh.flux_integral_2nd(i, std::numeric_limits<real>::quiet_NaN()),
                 std::exp(std::sqrt(x * x * x)) * 3.0 / 2.0 * std::sqrt(x),
                 1e-3);
+  }
+}
+
+TEST(flux_integral_1st, sinusoid) {
+  constexpr int ctrl_vols = 1024;
+
+  using Solver = WaveEqnSolver<ctrl_vols, Part1>;
+
+  Solver solver(0.0, 1.0, 0.5);
+
+  for(int ts = 0; ts < 10; ts++) {
+    auto &mesh = solver.cur_mesh();
+
+    for(int i = 1; i <= 10; i++) {
+      const real x = mesh.median_x(i);
+      EXPECT_NEAR(mesh.flux_integral_1st(i, solver.time()),
+                  -2.0 * pi * std::cos(2.0 * pi * (2.0 * solver.time() - x)),
+                  5e-3);
+    }
+    // We need to increment the time; this is the only way to do so
+    solver.timestep_rk1();
+
+    // Then overwrite the values with the exact solution
+    for(int i = 1; i <= ctrl_vols; i++) {
+      solver[i] =
+          Part1::avg_solution_val(mesh.x1(i), mesh.x2(i), solver.time());
+    }
+    solver.fill_ghostcells();
+  }
+}
+
+TEST(flux_integral_1st, poly) {
+  constexpr int ctrl_vols = 1024;
+
+  using Solver = WaveEqnSolver<ctrl_vols, Part1>;
+
+  Solver solver;
+  auto mesh = solver.cur_mesh();
+
+  for(int i = 0; i < mesh.extent(0); i++) {
+    const real x = mesh.median_x(i);
+
+    mesh(i) = x * x * x + 0.25 * std::sin(2.0 * pi * x) + 3.0;
+  }
+
+  for(int i = 2; i < mesh.extent(0) - 1; i++) {
+    const real x = mesh.median_x(i);
+    EXPECT_NEAR(mesh.flux_integral_1st(i, std::numeric_limits<real>::quiet_NaN()),
+                3.0 * x * x + 0.5 * pi * std::cos(2.0 * pi * x), 1e-2);
+  }
+}
+
+TEST(flux_integral_1st, exp) {
+  constexpr int ctrl_vols = 4096;
+
+  using Solver = WaveEqnSolver<ctrl_vols, Part1>;
+
+  Solver solver;
+  auto mesh = solver.cur_mesh();
+
+  // sqrt is nan for negative x, so skip the ghost cell
+  for(int i = 1; i < mesh.extent(0); i++) {
+    const real x = mesh.median_x(i);
+
+    mesh(i) = std::exp(std::sqrt(x * x * x));
+  }
+
+  // Avoid the boundary conditions by starting i > 2
+  for(int i = 3; i < mesh.extent(0) - 1; i++) {
+    const real x = mesh.median_x(i);
+    EXPECT_NEAR(mesh.flux_integral_1st(i, std::numeric_limits<real>::quiet_NaN()),
+                std::exp(std::sqrt(x * x * x)) * 3.0 / 2.0 * std::sqrt(x),
+                1e-2);
   }
 }
 
@@ -172,7 +245,7 @@ TEST(solver, rk2_avg_sol) {
   }
 }
 
-TEST(solver, rk3_avg_sol) {
+TEST(solver, third_avg_sol) {
   constexpr int ctrl_vols = 512;
 
   using Solver = WaveEqnSolver<ctrl_vols, Part1>;
@@ -180,7 +253,7 @@ TEST(solver, rk3_avg_sol) {
   Solver solver(0.0, 1.0, 0.25);
 
   for(int ts = 0; ts < 320; ts++) {
-    solver.timestep_rk3();
+    solver.timestep_3rd();
     const real t = solver.time();
     auto &mesh   = solver.cur_mesh();
     for(int i = 1; i < mesh.extent(0); i++) {
@@ -344,11 +417,11 @@ TEST(solver, mesh_convergence_order_rk2) {
 // Run the simulation until the maximum specified time
 // Return the average value of the solution
 template <int ctrl_vols>
-real run_simulation_rk3_p1(const real cfl, const real max_t) {
+real run_simulation_3rd_p1(const real cfl, const real max_t) {
   WaveEqnSolver<ctrl_vols, Part1> solver(cfl);
 
   while(solver.time() < max_t) {
-    solver.timestep_rk3();
+    solver.timestep_3rd();
   }
 
   real total_val = 0.0;
@@ -358,13 +431,47 @@ real run_simulation_rk3_p1(const real cfl, const real max_t) {
   return total_val * solver.dx();
 }
 
-TEST(solver, mesh_convergence_order_rk3) {
+TEST(solver, mesh_convergence_order_3rd) {
   constexpr int coarse_n     = 20;
   constexpr int med_n        = coarse_n * 2;
   constexpr int fine_n       = med_n * 2;
-  const real coarse_sol      = run_simulation_rk3_p1<coarse_n>(0.2, 1.0);
-  const real med_sol         = run_simulation_rk3_p1<med_n>(0.2, 1.0);
-  const real fine_sol        = run_simulation_rk3_p1<fine_n>(0.2, 1.0);
+  const real coarse_sol      = run_simulation_3rd_p1<coarse_n>(0.2, 1.0);
+  const real med_sol         = run_simulation_3rd_p1<med_n>(0.2, 1.0);
+  const real fine_sol        = run_simulation_3rd_p1<fine_n>(0.2, 1.0);
+  const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
+
+  // printf("Coarse Solution: % .8e\n", coarse_sol);
+  // printf("Medium Solution: % .8e\n", med_sol);
+  // printf("Fine Solution: % .8e\n", fine_sol);
+  // printf("Order: % .8e\n", order);
+
+  EXPECT_NEAR(order, 2.0, 1e-1);
+}
+
+// Run the simulation until the maximum specified time
+// Return the average value of the solution
+template <int ctrl_vols>
+real run_simulation_4th_p1(const real cfl, const real max_t) {
+  WaveEqnSolver<ctrl_vols, Part1> solver(cfl);
+
+  while(solver.time() < max_t) {
+    solver.timestep_4th();
+  }
+
+  real total_val = 0.0;
+  for(int i = 1; i <= ctrl_vols; i++) {
+    total_val += std::abs(solver[i]);
+  }
+  return total_val * solver.dx();
+}
+
+TEST(solver, mesh_convergence_order_4th) {
+  constexpr int coarse_n     = 40;
+  constexpr int med_n        = coarse_n * 2;
+  constexpr int fine_n       = med_n * 2;
+  const real coarse_sol      = run_simulation_4th_p1<coarse_n>(0.2, 1.0);
+  const real med_sol         = run_simulation_4th_p1<med_n>(0.2, 1.0);
+  const real fine_sol        = run_simulation_4th_p1<fine_n>(0.2, 1.0);
   const auto [order, extrap] = richardson(fine_sol, med_sol, coarse_sol);
 
   // printf("Coarse Solution: % .8e\n", coarse_sol);

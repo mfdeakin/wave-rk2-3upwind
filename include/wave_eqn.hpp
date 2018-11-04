@@ -106,8 +106,17 @@ class Mesh : public ND_Array<real, _ctrl_vols + 1> {
   constexpr Mesh(const real _min_x = 0.0, const real _max_x = 1.0) noexcept
       : _min_x(_min_x), _max_x(_max_x), _dx((_max_x - _min_x) / _ctrl_vols) {}
 
-  // Computes the CVA of dT/dx
-  constexpr real flux_integral(const int i, const real time) const noexcept {
+  // Computes the CVA of dT/dx with a first order approximation
+  constexpr real flux_integral_1st(const int i, const real time) const
+      noexcept {
+    assert(i > 0);
+    assert(i < this->extent(0));
+    return ((*this)(i) - (*this)(i - 1)) / dx();
+  }
+
+  // Computes the CVA of dT/dx with a second order approximation
+  constexpr real flux_integral_2nd(const int i, const real time) const
+      noexcept {
     assert(i > 0);
     assert(i < this->extent(0));
     if(i > 1) {
@@ -117,6 +126,30 @@ class Mesh : public ND_Array<real, _ctrl_vols + 1> {
       // Evaluate the flux at the right side of the cell, then subtracting the
       // given value at the left side of the cell and dividing by dx gives the
       // approximate derivative
+      return ((3.0 * (*this)(1) - 1.0 * (*this)(0)) / 2.0 -
+              BoundaryConds::boundary_val(time)) /
+             dx();
+    }
+  }
+
+  // Computes the CVA of dT/dx with a second order approximation
+  constexpr real flux_integral_3rd(const int i, const real time) const
+      noexcept {
+    assert(i > 0);
+    assert(i < this->extent(0));
+    if(i > 2) {
+      return (11.0 * (*this)(i)-18.0 * (*this)(i - 1) + 9.0 * (*this)(i - 2) -
+              2.0 * (*this)(i - 3)) /
+             (6.0 * dx());
+    } else if(i > 1) {
+      // Evaluate the flux at the right side of the cell, then subtracting the
+      // given value at the left side of the cell and dividing by dx gives the
+      // approximate derivative
+      return ((11.0 * (*this)(i)-7.0 * (*this)(i - 1) + 2.0 * (*this)(i - 2)) /
+                  6.0 -
+              BoundaryConds::boundary_val(time)) /
+             dx();
+    } else {
       return ((3.0 * (*this)(1) - 1.0 * (*this)(0)) / 2.0 -
               BoundaryConds::boundary_val(time)) /
              dx();
@@ -165,10 +198,17 @@ class WaveEqnSolver {
     BoundaryConds::fill_ghostcells(mesh(ts), t);
   }
 
+  void timestep_rk1_1st() noexcept;
+  void timestep_rk2_1st() noexcept;
+  void timestep_rk4_1st() noexcept;
+  void timestep_3rd_1st() noexcept;
+  void timestep_4th_1st() noexcept;
+
   void timestep_rk1() noexcept;
   void timestep_rk2() noexcept;
-  void timestep_rk3() noexcept;
   void timestep_rk4() noexcept;
+  void timestep_3rd() noexcept;
+  void timestep_4th() noexcept;
 
   real time() const noexcept { return _time; }
   real dx() const noexcept { return mesh_1.dx(); }
@@ -207,6 +247,10 @@ class WaveEqnSolver {
         return mesh_3;
     }
   }
+
+  void flux_integration_1st(const MeshT &cur_ts, const MeshT &partial_ts,
+                            MeshT &next_ts, const real bc_time,
+                            const real stage_dt) noexcept;
 
   void flux_integration(const MeshT &cur_ts, const MeshT &partial_ts,
                         MeshT &next_ts, const real bc_time,
