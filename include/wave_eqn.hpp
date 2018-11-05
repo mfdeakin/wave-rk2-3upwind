@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <cmath>
+#include <limits>
 
 #include "nd_array/nd_array.hpp"
 
@@ -60,6 +61,15 @@ class Part1 {
 class Part2 {
  public:
   static constexpr real velocity() noexcept { return 2.0; }
+
+  constexpr static real solution_val(const real x, const real time) noexcept {
+    return std::numeric_limits<real>::quiet_NaN();
+  }
+
+  constexpr static real avg_solution_val(const real x1, const real x2,
+                                         const real time) noexcept {
+    return std::numeric_limits<real>::quiet_NaN();
+  }
 
   static real boundary_val(const real time) noexcept {
     return Part1::boundary_val(time);
@@ -132,27 +142,41 @@ class Mesh : public ND_Array<real, _ctrl_vols + 1> {
     }
   }
 
-  // Computes the CVA of dT/dx with a second order approximation
+  // Computes the CVA of dT/dx with a third order approximation
   constexpr real flux_integral_3rd(const int i, const real time) const
       noexcept {
     assert(i > 0);
     assert(i < this->extent(0));
-    if(i > 2) {
+    if(i > 3) {
       return (11.0 * (*this)(i)-18.0 * (*this)(i - 1) + 9.0 * (*this)(i - 2) -
               2.0 * (*this)(i - 3)) /
              (6.0 * dx());
-    } else if(i > 1) {
-      // Evaluate the flux at the right side of the cell, then subtracting the
-      // given value at the left side of the cell and dividing by dx gives the
-      // approximate derivative
-      return ((11.0 * (*this)(i)-7.0 * (*this)(i - 1) + 2.0 * (*this)(i - 2)) /
-                  6.0 -
-              BoundaryConds::boundary_val(time)) /
-             dx();
     } else {
-      return ((3.0 * (*this)(1) - 1.0 * (*this)(0)) / 2.0 -
-              BoundaryConds::boundary_val(time)) /
-             dx();
+      // const real T0 = -6.0 * BoundaryConds::boundary_val(time) +
+      //                 5.0 * (*this)(i - 1) - (*this)(i);
+      const real T0  = BoundaryConds::avg_solution_val(x1(0), x2(0), time);
+      // const real Tm1 = BoundaryConds::avg_solution_val(x1(-1), x2(-1), time);
+      const real T_5half = (11.0 * (*this)(2) - 7.0 * (*this)(1) + T0) / 6.0;
+      // const real T_5half = BoundaryConds::solution_val(x1(3), time);
+      if(i == 3) {
+        const real T_7half =
+            (11.0 * (*this)(3) - 7.0 * (*this)(2) + 2.0 * (*this)(1)) / 6.0;
+        return (T_7half - T_5half) / (dx());
+      } else {
+        // const real Tm1 = 2.0 * (*this)(i - 1) + 5.0 * T0 -
+        //                  6.0 * BoundaryConds::boundary_val(time);
+        // const real T_3half = (11.0 * (*this)(1) - 7.0 * T0 + 2.0 * Tm1)
+        // / 6.0;
+        const real T_3half = BoundaryConds::solution_val(x1(2), time);
+        if(i == 2) {
+          // Evaluate the flux at the right side of the cell, then subtracting
+          // the given value at the left side of the cell and dividing by dx
+          // gives the approximate derivative
+          return (T_5half - T_3half) / (dx());
+        } else {
+          return (T_3half - BoundaryConds::boundary_val(time)) / dx();
+        }
+      }
     }
   }
 
@@ -255,6 +279,10 @@ class WaveEqnSolver {
   void flux_integration(const MeshT &cur_ts, const MeshT &partial_ts,
                         MeshT &next_ts, const real bc_time,
                         const real stage_dt) noexcept;
+
+  void flux_integration_3rd(const MeshT &cur_ts, const MeshT &partial_ts,
+                            MeshT &next_ts, const real bc_time,
+                            const real stage_dt) noexcept;
 
   MeshT mesh_1, mesh_2, mesh_3;
 

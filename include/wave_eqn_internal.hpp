@@ -28,13 +28,13 @@ void WaveEqnSolver<_ctrl_vols, _bc>::timestep_rk2_1st() noexcept {
   // w(1) only relies on the current timestep,
   // so treat it as the partial timestep as well as the current one
   fill_ghostcells();
-  flux_integration(mesh(_cur_ts), mesh(_cur_ts), mesh(partial_ts), time(),
-                   dt() / 2.0);
+  flux_integration_1st(mesh(_cur_ts), mesh(_cur_ts), mesh(partial_ts), time(),
+                       dt() / 2.0);
 
   // Next compute the complete timestep
   fill_ghostcells(partial_ts, time() + dt() / 2.0);
-  flux_integration(mesh(_cur_ts), mesh(partial_ts), mesh(next_ts),
-                   time() + dt() / 2.0, dt());
+  flux_integration_1st(mesh(_cur_ts), mesh(partial_ts), mesh(next_ts),
+                       time() + dt() / 2.0, dt());
   _cur_ts = next_ts;
 
   _time += dt();
@@ -255,28 +255,21 @@ void WaveEqnSolver<_ctrl_vols, _bc>::timestep_4th() noexcept {
   // First compute w(1) as the partial timestep term
   // w(1) only relies on the current timestep,
   // so treat it as the partial timestep as well as the current one
-  fill_ghostcells();
-  flux_integration(mesh(_cur_ts), mesh(_cur_ts), mesh(partial_ts), time(),
-                   dt() / 4.0);
+  flux_integration_3rd(mesh(_cur_ts), mesh(_cur_ts), mesh(partial_ts), time(),
+                       dt() / 4.0);
 
   // Second stage
   // compute w(2) based on w(1) and the current timestep
-  fill_ghostcells(partial_ts, time() + dt() / 4.0);
-
-  flux_integration(mesh(_cur_ts), mesh(partial_ts), mesh(partial2_ts),
-                   time() + dt() / 4.0, dt() / 3.0);
+  flux_integration_3rd(mesh(_cur_ts), mesh(partial_ts), mesh(partial2_ts),
+                       time() + dt() / 4.0, dt() / 3.0);
 
   // Third stage
-  fill_ghostcells(partial2_ts, time() + dt() / 3.0);
-
-  flux_integration(mesh(_cur_ts), mesh(partial2_ts), mesh(partial_ts),
-                   time() + dt() / 3.0, dt() / 2.0);
+  flux_integration_3rd(mesh(_cur_ts), mesh(partial2_ts), mesh(partial_ts),
+                       time() + dt() / 3.0, dt() / 2.0);
 
   // Fourth stage
-  fill_ghostcells(partial_ts, time() + dt() / 2.0);
-
-  flux_integration(mesh(_cur_ts), mesh(partial_ts), mesh(partial2_ts),
-                   time() + dt() / 2.0, dt());
+  flux_integration_3rd(mesh(_cur_ts), mesh(partial_ts), mesh(partial2_ts),
+                       time() + dt() / 2.0, dt());
 
   _cur_ts = partial2_ts;
 
@@ -293,7 +286,8 @@ void WaveEqnSolver<_ctrl_vols, _bc>::flux_integration_1st(
     // Compute the dT/dx term with the second order upwinding scheme
     // Then add the previous time stage to this times the stage_dt
     next_ts(i) =
-        -2.0 * partial_ts.flux_integral_1st(i, bc_time) * stage_dt + cur_ts(i);
+        -_bc::velocity() * partial_ts.flux_integral_1st(i, bc_time) * stage_dt +
+        cur_ts(i);
   }
 }
 
@@ -307,7 +301,23 @@ void WaveEqnSolver<_ctrl_vols, _bc>::flux_integration(
     // Compute the dT/dx term with the second order upwinding scheme
     // Then add the previous time stage to this times the stage_dt
     next_ts(i) =
-        -2.0 * partial_ts.flux_integral_2nd(i, bc_time) * stage_dt + cur_ts(i);
+        -_bc::velocity() * partial_ts.flux_integral_2nd(i, bc_time) * stage_dt +
+        cur_ts(i);
+  }
+}
+
+template <int _ctrl_vols, typename _bc>
+void WaveEqnSolver<_ctrl_vols, _bc>::flux_integration_3rd(
+    const MeshT &cur_ts, const MeshT &partial_ts, MeshT &next_ts,
+    const real bc_time, const real stage_dt) noexcept {
+  assert(&next_ts != &cur_ts);
+  assert(&next_ts != &partial_ts);
+  for(int i = 1; i < next_ts.extent(0); i++) {
+    // Compute the dT/dx term with the second order upwinding scheme
+    // Then add the previous time stage to this times the stage_dt
+    next_ts(i) =
+        -_bc::velocity() * partial_ts.flux_integral_3rd(i, bc_time) * stage_dt +
+        cur_ts(i);
   }
 }
 
