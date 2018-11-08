@@ -10,7 +10,6 @@ python:
 
 addons:
   apt:
-  apt:
     sources:
     - ubuntu-toolchain-r-test
     packages:
@@ -24,6 +23,14 @@ branches:
   - master
 
 install:
+# Make certain we use g++-7
+- if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then ln -s $(which g++-7) g++; export PATH="${PWD}:${PATH}"; fi
+# Build googletest
+- cd /usr/src/gtest
+- sudo $(which cmake) .
+- sudo make
+- sudo mv libg* /usr/lib
+- cd ${TRAVIS_BUILD_DIR}
 # We need conda - follow the instructions here: https://conda.io/docs/user-guide/tasks/use-conda-with-travis-ci.html
 - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
 - bash miniconda.sh -b -p ${HOME}/miniconda
@@ -37,8 +44,6 @@ install:
 - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pybind11
 - source activate test-environment
 - conda install pybind11 -c conda-forge
-# Make certain we use g++-7
-- if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then ln -s $(which g++-7) g++; export PATH="${PWD}:${PATH}"; fi
 
 script:
 # Potential directories:
