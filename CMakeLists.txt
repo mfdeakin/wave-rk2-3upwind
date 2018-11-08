@@ -16,5 +16,5 @@ add_executable(waves_tester ./src/test.cpp)
 add_executable(waves_solver ./src/solver.cpp)
 add_test(waves_test waves_tester)
 
-target_link_libraries(waves_tester gtest waves)
+target_link_libraries(waves_tester gtest waves pthread)
 target_link_libraries(waves_solver waves pybind11::embed)
