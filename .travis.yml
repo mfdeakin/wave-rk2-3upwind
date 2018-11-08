@@ -55,7 +55,7 @@ script:
 - make VERBOSE=1 -j 4
 - ctest -VV
 
-after_success:
+after_script:
 - cd ${TRAVIS_BUILD_DIR}
 - lcov --directory . --capture --output-file coverage.info
 - lcov --remove coverage.info '/usr/*' --output-file coverage.info
