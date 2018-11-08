@@ -53,7 +53,7 @@ script:
 - pybind_dir=/home/travis/miniconda/pkgs/pybind11-2.2.4-py37hfd86e86_0/share/cmake/pybind11
 - cmake -D CMAKE_BUILD_TYPE=Debug -D CMAKE_CXX_FLAGS="-fprofile-arcs -ftest-coverage -fsanitize=address" -D pybind11_DIR=${pybind_dir} ./
 - make VERBOSE=1 -j 4
-- make test
+- ctest -VV
 
 after_success:
 - cd ${TRAVIS_BUILD_DIR}
